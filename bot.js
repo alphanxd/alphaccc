@@ -3,7 +3,7 @@ const express = require('express');
 const { pathfinder, Movements, goals } = require('mineflayer-pathfinder');
 const mcDataLoader = require('minecraft-data');
 
-// KEEP RENDER ALIVE
+// 🌐 KEEP RENDER ALIVE
 const app = express();
 app.get('/', (req, res) => res.send('Bot Alive'));
 app.listen(3000, () => console.log('🌐 KeepAlive running'));
@@ -11,10 +11,11 @@ app.listen(3000, () => console.log('🌐 KeepAlive running'));
 function startBot() {
 
   const bot = mineflayer.createBot({
-    host: 'VoidPulseSMP.aternos.me', // CHANGE
-    port: 15376,                     // CHANGE
-    username: 'GodAI_1',             // CHANGE
-    version: false                   // auto detect (1.21 safe)
+    host: 'VoidPulseSMP.aternos.me', // CHANGE if needed
+    port: 15376,                     // CHANGE if needed
+    username: 'GodAI_1',
+    version: false,                  // auto detect (1.21 safe)
+    auth: 'offline'                  // 🔐 IMPORTANT (for cracked servers)
   });
 
   bot.loadPlugin(pathfinder);
@@ -127,14 +128,23 @@ function startBot() {
   });
 
   // =========================
+  // ⚠ DEBUG LOGGING (VERY IMPORTANT)
+  // =========================
+  bot.on('kicked', (reason) => {
+    console.log('❌ Kicked for:', reason);
+  });
+
+  bot.on('error', (err) => {
+    console.log('❌ Error:', err);
+  });
+
+  // =========================
   // 🔁 AUTO RECONNECT
   // =========================
   bot.on('end', () => {
-    console.log('❌ Disconnected → reconnecting...');
+    console.log('🔁 Reconnecting in 5s...');
     setTimeout(startBot, 5000);
   });
-
-  bot.on('error', err => console.log('Error:', err));
 }
 
 startBot();
