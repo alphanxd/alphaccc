@@ -12,10 +12,10 @@ function startBot() {
 
   const bot = mineflayer.createBot({
     host: 'VoidPulseSMP.aternos.me', // CHANGE if needed
-    port: 15376,                     // CHANGE if needed
+    port: 15376,
     username: 'GodAI_1',
-    version: false,                  // auto detect (1.21 safe)
-    auth: 'offline'                  // 🔐 IMPORTANT (for cracked servers)
+    version: false,
+    auth: 'offline' // for cracked servers
   });
 
   bot.loadPlugin(pathfinder);
@@ -32,10 +32,25 @@ function startBot() {
 
     bot.pathfinder.setMovements(movements);
 
-    // Save home position
+    // Save spawn as home
     home = bot.entity.position.clone();
 
     brainLoop();
+  });
+
+  // =========================
+  // 💀 AUTO RESPAWN (IMPORTANT)
+  // =========================
+  bot.on('death', () => {
+    console.log('💀 Bot died → respawning...');
+
+    setTimeout(() => {
+      try {
+        bot._client.write('client_command', { actionId: 0 });
+      } catch (e) {
+        console.log('Respawn error:', e);
+      }
+    }, 2000);
   });
 
   // =========================
@@ -46,6 +61,7 @@ function startBot() {
       try {
         eatIfHungry();
         avoidMobs();
+        healthCheck();
       } catch (err) {
         console.log('Brain Error:', err);
       }
@@ -97,6 +113,21 @@ function startBot() {
   }
 
   // =========================
+  // ❤️ LOW HEALTH ESCAPE
+  // =========================
+  function healthCheck() {
+    if (bot.health < 10) {
+      console.log('⚠ Low health → retreating');
+
+      const pos = bot.entity.position.offset(5, 0, 5);
+
+      bot.pathfinder.setGoal(
+        new goals.GoalBlock(pos.x, pos.y, pos.z)
+      );
+    }
+  }
+
+  // =========================
   // 🎮 CHAT COMMANDS
   // =========================
   bot.on('chat', (username, message) => {
@@ -128,10 +159,10 @@ function startBot() {
   });
 
   // =========================
-  // ⚠ DEBUG LOGGING (VERY IMPORTANT)
+  // ⚠ DEBUG LOGS
   // =========================
   bot.on('kicked', (reason) => {
-    console.log('❌ Kicked for:', reason);
+    console.log('❌ Kicked:', reason);
   });
 
   bot.on('error', (err) => {
