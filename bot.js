@@ -5,14 +5,17 @@ const mcDataLoader = require('minecraft-data');
 
 // 🌐 KEEP ALIVE (Render)
 const app = express();
-app.get('/', (req, res) => res.send('Bot Army Alive'));
+app.get('/', (req, res) => res.send('Human Bot Alive'));
 app.listen(3000, () => console.log('🌐 KeepAlive running'));
 
 // ⚙ SETTINGS
 const HOST = 'VoidPulseSMP.aternos.me';
 const PORT = 15376;
-const BOT_COUNT = 2; // ⚠ keep low for Aternos
+const BOT_COUNT = 1; // start with 1 (increase later)
 
+// =========================
+// 🤖 CREATE BOT
+// =========================
 function createBot(name) {
 
   const bot = mineflayer.createBot({
@@ -26,49 +29,43 @@ function createBot(name) {
   bot.loadPlugin(pathfinder);
 
   let mcData;
-  let movements;
 
   bot.on('spawn', () => {
     console.log(`🤖 ${name} joined`);
 
     mcData = mcDataLoader(bot.version);
-    movements = new Movements(bot, mcData);
-    bot.pathfinder.setMovements(movements);
+    bot.pathfinder.setMovements(new Movements(bot, mcData));
+
+    // 🚀 instant move (anti-timeout)
+    bot.setControlState('forward', true);
+    setTimeout(() => bot.setControlState('forward', false), 1500);
 
     equipArmor();
-    startBrain();
-    antiAFK();
+    humanMovement();
+    humanLook();
     antiTimeout();
-    randomLook();
-  });
 
-  // =========================
-  // 💀 AUTO RESPAWN
-  // =========================
-  bot.on('death', () => {
-    console.log(`${name} died → respawn`);
+    // delay brain (more human-like)
     setTimeout(() => {
-      try {
-        bot._client.write('client_command', { actionId: 0 });
-      } catch {}
-    }, 2000);
+      brainLoop();
+    }, 4000);
   });
 
   // =========================
-  // 🧠 MAIN AI LOOP
+  // 🧠 HUMAN AI LOOP
   // =========================
-  function startBrain() {
+  function brainLoop() {
     setInterval(() => {
       try {
-        attackMob();
         eatIfHungry();
-        lagAware();
+        attackMob();
+        randomPause(); // human delay
       } catch {}
-    }, 2000);
+    }, 2500 + Math.random() * 2000);
   }
 
   // =========================
-  // ⚔ AUTO COMBAT
+  // ⚔ SMART COMBAT
   // =========================
   function attackMob() {
     const mob = Object.values(bot.entities).find(e =>
@@ -77,8 +74,12 @@ function createBot(name) {
     );
 
     if (mob) {
-      bot.lookAt(mob.position.offset(0, 1, 0));
-      bot.attack(mob);
+      bot.lookAt(mob.position.offset(0, 1, 0), true);
+
+      setTimeout(() => {
+        bot.attack(mob);
+      }, 300 + Math.random() * 400); // human reaction delay
+
       console.log(`${name} ⚔ attacking ${mob.name}`);
     }
   }
@@ -87,16 +88,18 @@ function createBot(name) {
   // 🍖 AUTO EAT
   // =========================
   async function eatIfHungry() {
-    if (bot.food < 15 && !bot.isEating) {
+    if (bot.food < 14 && !bot.isEating) {
       const food = bot.inventory.items().find(i =>
         i.name.includes('bread') ||
-        i.name.includes('beef')
+        i.name.includes('beef') ||
+        i.name.includes('chicken')
       );
 
       if (food) {
         try {
           await bot.equip(food, 'hand');
           await bot.consume();
+          console.log(`${name} 🍖 eating`);
         } catch {}
       }
     }
@@ -106,8 +109,6 @@ function createBot(name) {
   // 🛡 AUTO ARMOR
   // =========================
   async function equipArmor() {
-    const armorSlots = ['head', 'torso', 'legs', 'feet'];
-
     for (let item of bot.inventory.items()) {
       if (item.name.includes('helmet')) await bot.equip(item, 'head').catch(()=>{});
       if (item.name.includes('chestplate')) await bot.equip(item, 'torso').catch(()=>{});
@@ -117,32 +118,48 @@ function createBot(name) {
   }
 
   // =========================
-  // 🧠 LAG-AWARE SYSTEM
+  // 🕺 HUMAN MOVEMENT
   // =========================
-  function lagAware() {
-    const tps = bot.time.timeOfDay;
+  function humanMovement() {
+    setInterval(() => {
+      const actions = ['forward', 'back', 'left', 'right'];
+      const action = actions[Math.floor(Math.random() * actions.length)];
 
-    // simple lag detection (tick delay)
-    if (tps % 20 !== 0) {
-      console.log(`${name} ⚠ Lag detected → slowing AI`);
-    }
+      bot.setControlState(action, true);
+
+      setTimeout(() => {
+        bot.setControlState(action, false);
+      }, 1000 + Math.random() * 1000);
+
+      // occasional jump
+      if (Math.random() < 0.4) {
+        bot.setControlState('jump', true);
+        setTimeout(() => bot.setControlState('jump', false), 300);
+      }
+
+    }, 2000 + Math.random() * 2000);
   }
 
   // =========================
-  // 🕺 ANTI AFK (FAST)
+  // 👀 HUMAN LOOK
   // =========================
-  function antiAFK() {
+  function humanLook() {
     setInterval(() => {
-      bot.setControlState('forward', true);
+      const yaw = bot.entity.yaw + (Math.random() - 0.5);
+      const pitch = (Math.random() - 0.5) * 0.3;
 
-      setTimeout(() => {
-        bot.setControlState('forward', false);
-      }, 1000);
+      bot.look(yaw, pitch, true);
+    }, 1500 + Math.random() * 1000);
+  }
 
-      bot.setControlState('jump', true);
-      setTimeout(() => bot.setControlState('jump', false), 300);
-
-    }, 2000);
+  // =========================
+  // ⏱ RANDOM PAUSE (HUMAN FEEL)
+  // =========================
+  function randomPause() {
+    if (Math.random() < 0.2) {
+      bot.clearControlStates();
+      console.log(`${name} 🧠 thinking...`);
+    }
   }
 
   // =========================
@@ -157,16 +174,14 @@ function createBot(name) {
   }
 
   // =========================
-  // 👀 RANDOM LOOK
+  // 💀 RESPAWN
   // =========================
-  function randomLook() {
-    setInterval(() => {
-      bot.look(
-        bot.entity.yaw + (Math.random() - 0.5),
-        bot.entity.pitch
-      );
-    }, 1500);
-  }
+  bot.on('death', () => {
+    console.log(`${name} 💀 died`);
+    setTimeout(() => {
+      bot._client.write('client_command', { actionId: 0 });
+    }, 2000);
+  });
 
   // =========================
   // 🔁 RECONNECT
@@ -181,11 +196,11 @@ function createBot(name) {
 }
 
 // =========================
-// 🤖 BOT ARMY SPAWN
+// 🤖 START BOT(S)
 // =========================
 
 for (let i = 1; i <= BOT_COUNT; i++) {
   setTimeout(() => {
-    createBot('GodBot_' + i);
+    createBot('HumanBot_' + i);
   }, i * 3000);
 }
