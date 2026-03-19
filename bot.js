@@ -11,11 +11,11 @@ app.listen(3000, () => console.log('🌐 KeepAlive running'));
 function startBot() {
 
   const bot = mineflayer.createBot({
-    host: 'VoidPulseSMP.aternos.me', // CHANGE if needed
+    host: 'VoidPulseSMP.aternos.me',
     port: 15376,
-    username: 'GodAI_1',
+    username: 'Bot_' + Math.floor(Math.random() * 10000), // random name
     version: false,
-    auth: 'offline' // for cracked servers
+    auth: 'offline'
   });
 
   bot.loadPlugin(pathfinder);
@@ -29,32 +29,29 @@ function startBot() {
 
     mcData = mcDataLoader(bot.version);
     movements = new Movements(bot, mcData);
-
     bot.pathfinder.setMovements(movements);
 
-    // Save spawn as home
     home = bot.entity.position.clone();
 
     brainLoop();
+    antiAFK();
+    randomLook();
   });
 
   // =========================
-  // 💀 AUTO RESPAWN (IMPORTANT)
+  // 💀 AUTO RESPAWN
   // =========================
   bot.on('death', () => {
-    console.log('💀 Bot died → respawning...');
-
+    console.log('💀 Died → Respawning...');
     setTimeout(() => {
       try {
         bot._client.write('client_command', { actionId: 0 });
-      } catch (e) {
-        console.log('Respawn error:', e);
-      }
+      } catch (e) {}
     }, 2000);
   });
 
   // =========================
-  // 🧠 MAIN AI LOOP
+  // 🧠 AI LOOP
   // =========================
   function brainLoop() {
     setInterval(() => {
@@ -62,9 +59,7 @@ function startBot() {
         eatIfHungry();
         avoidMobs();
         healthCheck();
-      } catch (err) {
-        console.log('Brain Error:', err);
-      }
+      } catch (e) {}
     }, 4000);
   }
 
@@ -73,10 +68,10 @@ function startBot() {
   // =========================
   async function eatIfHungry() {
     if (bot.food < 15 && !bot.isEating) {
-      const food = bot.inventory.items().find(item =>
-        item.name.includes('bread') ||
-        item.name.includes('beef') ||
-        item.name.includes('chicken')
+      const food = bot.inventory.items().find(i =>
+        i.name.includes('bread') ||
+        i.name.includes('beef') ||
+        i.name.includes('chicken')
       );
 
       if (food) {
@@ -84,13 +79,13 @@ function startBot() {
           await bot.equip(food, 'hand');
           await bot.consume();
           console.log('🍖 Eating...');
-        } catch (e) {}
+        } catch {}
       }
     }
   }
 
   // =========================
-  // ⚠ MOB AVOID SYSTEM
+  // ⚠ MOB ESCAPE
   // =========================
   function avoidMobs() {
     const mob = Object.values(bot.entities).find(e =>
@@ -99,15 +94,15 @@ function startBot() {
     );
 
     if (mob) {
-      console.log('⚠ Mob nearby → escaping');
+      console.log('⚠ Mob detected → running');
 
       const dx = bot.entity.position.x - mob.position.x;
       const dz = bot.entity.position.z - mob.position.z;
 
-      const escapePos = bot.entity.position.offset(dx * 2, 0, dz * 2);
+      const pos = bot.entity.position.offset(dx * 2, 0, dz * 2);
 
       bot.pathfinder.setGoal(
-        new goals.GoalBlock(escapePos.x, escapePos.y, escapePos.z)
+        new goals.GoalBlock(pos.x, pos.y, pos.z)
       );
     }
   }
@@ -117,7 +112,7 @@ function startBot() {
   // =========================
   function healthCheck() {
     if (bot.health < 10) {
-      console.log('⚠ Low health → retreating');
+      console.log('⚠ Low health → retreat');
 
       const pos = bot.entity.position.offset(5, 0, 5);
 
@@ -128,7 +123,40 @@ function startBot() {
   }
 
   // =========================
-  // 🎮 CHAT COMMANDS
+  // 🕺 HUMAN-LIKE MOVEMENT
+  // =========================
+  function antiAFK() {
+    setInterval(() => {
+      const actions = ['forward', 'back', 'left', 'right'];
+      const action = actions[Math.floor(Math.random() * actions.length)];
+
+      bot.setControlState(action, true);
+
+      setTimeout(() => {
+        bot.setControlState(action, false);
+      }, 2000);
+
+      if (Math.random() < 0.5) {
+        bot.setControlState('jump', true);
+        setTimeout(() => bot.setControlState('jump', false), 500);
+      }
+
+    }, 8000);
+  }
+
+  // =========================
+  // 👀 RANDOM LOOK
+  // =========================
+  function randomLook() {
+    setInterval(() => {
+      const yaw = Math.random() * Math.PI * 2;
+      const pitch = (Math.random() - 0.5) * 0.5;
+      bot.look(yaw, pitch, true);
+    }, 5000);
+  }
+
+  // =========================
+  // 🎮 COMMANDS
   // =========================
   bot.on('chat', (username, message) => {
     if (username === bot.username) return;
@@ -136,45 +164,40 @@ function startBot() {
     const target = bot.players[username]?.entity;
 
     if (message === '!follow' && target) {
-      bot.chat('👤 Following you');
+      bot.chat('👤 Following');
       bot.pathfinder.setGoal(new goals.GoalFollow(target, 2), true);
     }
 
     if (message === '!stop') {
-      bot.chat('🛑 Stopped');
+      bot.chat('🛑 Stop');
       bot.pathfinder.setGoal(null);
     }
 
     if (message === '!home' && home) {
-      bot.chat('🏠 Going home');
+      bot.chat('🏠 Home');
       bot.pathfinder.setGoal(
         new goals.GoalBlock(home.x, home.y, home.z)
       );
     }
-
-    if (message === '!jump') {
-      bot.setControlState('jump', true);
-      setTimeout(() => bot.setControlState('jump', false), 500);
-    }
   });
 
   // =========================
-  // ⚠ DEBUG LOGS
+  // ⚠ DEBUG
   // =========================
   bot.on('kicked', (reason) => {
-    console.log('❌ Kicked:', reason);
+    console.log('❌ KICKED:', reason);
   });
 
   bot.on('error', (err) => {
-    console.log('❌ Error:', err);
+    console.log('❌ ERROR:', err);
   });
 
   // =========================
-  // 🔁 AUTO RECONNECT
+  // 🔁 RECONNECT (SLOW = SAFE)
   // =========================
   bot.on('end', () => {
-    console.log('🔁 Reconnecting in 5s...');
-    setTimeout(startBot, 5000);
+    console.log('🔁 Reconnecting in 15s...');
+    setTimeout(startBot, 15000);
   });
 }
 
