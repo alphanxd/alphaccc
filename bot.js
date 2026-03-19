@@ -3,18 +3,21 @@ const express = require('express');
 const { pathfinder, Movements, goals } = require('mineflayer-pathfinder');
 const mcDataLoader = require('minecraft-data');
 
-// 🌐 KEEP RENDER ALIVE
+// 🌐 KEEP ALIVE (Render)
 const app = express();
 app.get('/', (req, res) => res.send('Bot Army Alive'));
-app.listen(3000, () => console.log('🌐 Server running'));
+app.listen(3000, () => console.log('🌐 KeepAlive running'));
 
-  const LEADER_NAME = 'thequantxd'; // 👈 PUT YOUR NAME
+// ⚙ SETTINGS
+const HOST = 'VoidPulseSMP.aternos.me';
+const PORT = 15376;
+const BOT_COUNT = 2; // ⚠ keep low for Aternos
 
 function createBot(name) {
 
   const bot = mineflayer.createBot({
-    host: 'VoidPulseSMP.aternos.me',
-    port: 15376,
+    host: HOST,
+    port: PORT,
     username: name,
     version: false,
     auth: 'offline'
@@ -32,55 +35,51 @@ function createBot(name) {
     movements = new Movements(bot, mcData);
     bot.pathfinder.setMovements(movements);
 
+    equipArmor();
     startBrain();
     antiAFK();
+    antiTimeout();
     randomLook();
   });
 
   // =========================
-  // 🧠 TEAM AI LOOP
+  // 💀 AUTO RESPAWN
+  // =========================
+  bot.on('death', () => {
+    console.log(`${name} died → respawn`);
+    setTimeout(() => {
+      try {
+        bot._client.write('client_command', { actionId: 0 });
+      } catch {}
+    }, 2000);
+  });
+
+  // =========================
+  // 🧠 MAIN AI LOOP
   // =========================
   function startBrain() {
     setInterval(() => {
       try {
-        followLeader();
-        avoidMobs();
+        attackMob();
         eatIfHungry();
+        lagAware();
       } catch {}
-    }, 3000);
+    }, 2000);
   }
 
   // =========================
-  // 👤 FOLLOW LEADER
+  // ⚔ AUTO COMBAT
   // =========================
-  function followLeader() {
-    const leader = bot.players[LEADER_NAME]?.entity;
-    if (!leader) return;
-
-    bot.pathfinder.setGoal(
-      new goals.GoalFollow(leader, 2),
-      true
-    );
-  }
-
-  // =========================
-  // ⚠ AVOID MOBS
-  // =========================
-  function avoidMobs() {
+  function attackMob() {
     const mob = Object.values(bot.entities).find(e =>
       e.type === 'mob' &&
-      e.position.distanceTo(bot.entity.position) < 5
+      e.position.distanceTo(bot.entity.position) < 4
     );
 
     if (mob) {
-      const dx = bot.entity.position.x - mob.position.x;
-      const dz = bot.entity.position.z - mob.position.z;
-
-      const escape = bot.entity.position.offset(dx * 2, 0, dz * 2);
-
-      bot.pathfinder.setGoal(
-        new goals.GoalBlock(escape.x, escape.y, escape.z)
-      );
+      bot.lookAt(mob.position.offset(0, 1, 0));
+      bot.attack(mob);
+      console.log(`${name} ⚔ attacking ${mob.name}`);
     }
   }
 
@@ -104,20 +103,57 @@ function createBot(name) {
   }
 
   // =========================
-  // 🕺 ANTI AFK
+  // 🛡 AUTO ARMOR
+  // =========================
+  async function equipArmor() {
+    const armorSlots = ['head', 'torso', 'legs', 'feet'];
+
+    for (let item of bot.inventory.items()) {
+      if (item.name.includes('helmet')) await bot.equip(item, 'head').catch(()=>{});
+      if (item.name.includes('chestplate')) await bot.equip(item, 'torso').catch(()=>{});
+      if (item.name.includes('leggings')) await bot.equip(item, 'legs').catch(()=>{});
+      if (item.name.includes('boots')) await bot.equip(item, 'feet').catch(()=>{});
+    }
+  }
+
+  // =========================
+  // 🧠 LAG-AWARE SYSTEM
+  // =========================
+  function lagAware() {
+    const tps = bot.time.timeOfDay;
+
+    // simple lag detection (tick delay)
+    if (tps % 20 !== 0) {
+      console.log(`${name} ⚠ Lag detected → slowing AI`);
+    }
+  }
+
+  // =========================
+  // 🕺 ANTI AFK (FAST)
   // =========================
   function antiAFK() {
     setInterval(() => {
-      const actions = ['forward', 'back', 'left', 'right'];
-      const act = actions[Math.floor(Math.random() * actions.length)];
-
-      bot.setControlState(act, true);
+      bot.setControlState('forward', true);
 
       setTimeout(() => {
-        bot.setControlState(act, false);
-      }, 1500);
+        bot.setControlState('forward', false);
+      }, 1000);
 
-    }, 7000);
+      bot.setControlState('jump', true);
+      setTimeout(() => bot.setControlState('jump', false), 300);
+
+    }, 2000);
+  }
+
+  // =========================
+  // ⚡ ANTI TIMEOUT
+  // =========================
+  function antiTimeout() {
+    setInterval(() => {
+      try {
+        bot._client.write('keep_alive', { keepAliveId: Date.now() });
+      } catch {}
+    }, 5000);
   }
 
   // =========================
@@ -125,18 +161,12 @@ function createBot(name) {
   // =========================
   function randomLook() {
     setInterval(() => {
-      bot.look(Math.random() * Math.PI * 2, 0, true);
-    }, 5000);
+      bot.look(
+        bot.entity.yaw + (Math.random() - 0.5),
+        bot.entity.pitch
+      );
+    }, 1500);
   }
-
-  // =========================
-  // 💀 RESPAWN
-  // =========================
-  bot.on('death', () => {
-    setTimeout(() => {
-      bot._client.write('client_command', { actionId: 0 });
-    }, 2000);
-  });
 
   // =========================
   // 🔁 RECONNECT
@@ -146,18 +176,16 @@ function createBot(name) {
     setTimeout(() => createBot(name), 5000);
   });
 
-  bot.on('kicked', (r) => console.log(`${name} kicked:`, r));
-  bot.on('error', (e) => console.log(`${name} error:`, e));
+  bot.on('kicked', r => console.log(`${name} kicked:`, r));
+  bot.on('error', e => console.log(`${name} error:`, e));
 }
 
 // =========================
-// 🤖 SPAWN BOT ARMY
+// 🤖 BOT ARMY SPAWN
 // =========================
-
-const BOT_COUNT = 3;
 
 for (let i = 1; i <= BOT_COUNT; i++) {
   setTimeout(() => {
-    createBot('ArmyBot_' + i);
+    createBot('GodBot_' + i);
   }, i * 3000);
 }
